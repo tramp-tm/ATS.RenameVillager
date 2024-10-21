@@ -1,0 +1,301 @@
+﻿/*
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using BepInEx;
+using BepInEx.Configuration;
+using Eremite;
+using Eremite.Characters.Villagers;
+using Eremite.Controller;
+using Eremite.Controller.Generator;
+using Eremite.Model;
+using Eremite.Model.Sound;
+using Eremite.Services;
+using Eremite.Services.Monitors;
+using HarmonyLib;
+using Newtonsoft.Json;
+using UnityEngine;
+using Random = System.Random;
+
+namespace ATS.RenameVillager
+{
+    [BepInPlugin(PluginInfo.PLUGIN_GUID, PluginInfo.PLUGIN_NAME, PluginInfo.PLUGIN_VERSION)]
+    public class Plugin : BaseUnityPlugin
+    {
+        public static Plugin Instance;
+        private Harmony harmony;
+
+        private static VilladersJSON _json = GetRenameVillagerJson();
+        private static PluginConfig _pluginConfig;
+        private static readonly List<Villager> CustomizedVillagers = [];
+        private static List<string> _customNames = [];
+        private static Dictionary<int, Villager> _villagersServiceVillagers = new();
+        private static readonly Random Random = new Random();
+        public static void LogInfo(object obj) => Instance.Logger.LogInfo(obj);
+        public static void LogError(object obj) => Instance.Logger.LogError(obj);
+        private Dictionary<ConfigEntry<KeyboardShortcut>, Action> _renameVillagersShortcuts = new();
+
+
+        private void Awake()
+        {
+            Instance = this;
+            harmony = Harmony.CreateAndPatchAll(typeof(Plugin));
+
+            _pluginConfig = new PluginConfig();
+            _renameVillagersShortcuts = _pluginConfig.renameVillagersShortcuts;
+            Logger.LogInfo($"Plugin {PluginInfo.PLUGIN_GUID} is loaded!");
+        }
+
+        [HarmonyPatch(typeof(MainController), nameof(MainController.OnServicesReady))]
+        [HarmonyPostfix]
+        private static void HookMainControllerSetup()
+        {
+            // This method will run after game load (Roughly on entering the main menu)
+            // At this point a lot of the game's data will be available.
+            // Your main entry point to access this data will be `Serviceable.Settings` or `MainController.Instance.Settings`
+            Instance.Logger.LogInfo($"Performing game initialization on behalf of {PluginInfo.PLUGIN_GUID}.");
+            Instance.Logger.LogInfo($"The game has loaded {MainController.Instance.Settings.effects.Length} effects.");
+        }
+
+        [HarmonyPatch(typeof(GameController), nameof(GameController.StartGame))]
+        [HarmonyPostfix]
+        private static void HookEveryGameStart()
+        {
+            // Too difficult to predict when GameController will exist and I can hook observers to it
+            // So just use Harmony and save us all some time. This method will run after every game start
+            var isNewGame = MB.GameSaveService.IsNewGame();
+            Instance.Logger.LogInfo($"Entered a game. Is this a new game: {isNewGame}.");
+
+            _villagersServiceVillagers = GameController.Instance.GameServices.VillagersService.Villagers;
+            CustomizedVillagers.Clear();
+            Instance.Logger.LogInfo(
+                $" GameController.Instance.GameServices.VillagersService.Villagers {_villagersServiceVillagers.Count}");
+            
+        }
+
+
+        private static void LoadCustomVillagers()
+        {
+            _json = GetRenameVillagerJson();
+            RefreshCustomVillagerNames();
+        }
+
+
+        private static VilladersJSON GetRenameVillagerJson()
+        {
+            var basePath = Directory.GetCurrentDirectory() + @"\BepInEx\config\RenameVillager.json";
+            // Tries to load the config from json
+            if (File.Exists(basePath))
+            {
+                try
+                {
+                    var cfg = JsonConvert.DeserializeObject<VilladersJSON>(File.ReadAllText(basePath));
+                    return cfg;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Failed loading config. Exception: {ex}");
+                }
+            }
+            else
+            {
+                Console.WriteLine($"Failed loading config. {basePath} does not exist.");
+            }
+
+            return new VilladersJSON();
+        }
+
+        private static void RefreshCustomVillagerNames()
+        {
+            if (_json != null)
+            {
+                _customNames = new List<string>(_json.CustomVillagers).ToList();
+                Instance.Logger.LogInfo($" Count of custom Villager Names = : {_customNames.Count}.");
+            }
+        }
+
+
+        // [HarmonyPatch(typeof(RacesService), nameof(RacesService.OnNewVillager))]
+        // [HarmonyPostfix]
+        // private static void OnNewVillager_PostPatch(Villager villager)
+        // {
+        //     if (_configuration.AutoRenameNewcomers)
+        //     {
+        //         if (!GameController.IsGameActive)
+        //             return;
+        //
+        //         LoadCustomVillagers();
+        //         if (UpdateVillager(villager))
+        //         {
+        //             GreetingsVillager(villager);
+        //         }
+        //
+        //         Instance.Logger.LogInfo($"OnNewVillager_PostPatch: {villager.state.name}");
+        //     }
+        // } 
+
+        [HarmonyPatch(typeof(VillagersService), nameof(VillagersService.SpawnVillagerAt))]
+        [HarmonyPatch([typeof(RaceModel), typeof(Vector3), typeof(Quaternion)])]
+        [HarmonyPostfix]
+        private static void SpawnVillagerAt_PostPatch(Villager __result)
+        {
+            if (_pluginConfig.AutoRenameNewcomers)
+            {
+                if (!GameController.IsGameActive)
+                    return;
+
+                LoadCustomVillagers();
+                if (UpdateVillager(__result))
+                {
+                    GreetingsVillager(__result);
+                }
+
+                Instance.Logger.LogInfo($"SpawnVillagerAt_PostPatch: {__result.state.name}");
+            }
+        }
+
+
+        private static void GreetingsVillager(Villager villager, string greetingsText = null)
+        {
+            greetingsText ??= _pluginConfig.GreetingString;
+
+            GameMB.NewsService.PublishNews(
+                $"{villager.state.name} ({villager.raceModel.displayName.Text}) {greetingsText}",
+                AlertSeverity.Info,
+                MB.Settings.monitorsConfig.newcomersIcon,
+                // null );
+                !GameMB.VillagersService.Villagers.ContainsValue(villager)
+                    ? (IBroadcaster)null
+                    : CreateBroadcaster(villager));
+        }
+
+
+        private static IBroadcaster CreateBroadcaster(Villager villager)
+        {
+            return (IBroadcaster)new RemoteBroadcaster((Action)(villager.Pick));
+        }
+
+        public static void RenameVillagers()
+        {
+            LoadCustomVillagers();
+            var customVillagerNamesString = string.Join(", ", _customNames);
+            Instance.Logger.LogInfo(
+                $" CreateServicesPostfix _customNames: {customVillagerNamesString} Villagers count: {_villagersServiceVillagers.Count} CustVillagers count: {CustomizedVillagers.Count}");
+            var unchanged = GetUncustomizedVillagers();
+            Instance.Logger.LogInfo($" unchanged count: {unchanged.Count}");
+            if (unchanged.Count > 0)
+            {
+                foreach (var ucv in unchanged)
+                {
+                    Instance.Logger.LogInfo($" UpdateVillager: {ucv.state.name}");
+                    if (UpdateVillager(ucv))
+                    {
+                        GreetingsVillager(ucv);
+                    }
+                }
+            }
+        }
+
+        private static bool UpdateVillager(Villager villager)
+        {
+            var newName = GetCustomVillagerName();
+            if (!string.IsNullOrEmpty(newName))
+            {
+                UpdateVillagerName(villager, newName);
+                CustomizedVillagers.Add(villager);
+                return true;
+            }
+
+            return false;
+        }
+
+        private static void UpdateVillagerName(Villager villager, string newName)
+        {
+            Instance.Logger.LogInfo($" change name to : {newName}");
+            villager.state.name = newName; // name
+            villager.externalName = newName; // DisplayName (message about leave)
+            villager.view.ShowName(newName); // popup with Name
+        }
+
+        private static string GetCustomVillagerName()
+        {
+            var unusedVillagerNames = GetUnusedVillagerNames();
+            Instance.Logger.LogInfo(
+                $" getCustomVillagerName // unusedVillagerNames.Count: {unusedVillagerNames.Count}");
+
+            if (unusedVillagerNames.Count > 0)
+            {
+                var randomIndex = Random.Next(unusedVillagerNames.Count);
+                var randomName = unusedVillagerNames[randomIndex]; // Возвращаем элемент по случайному индексу
+                return randomName;
+            }
+
+            return null;
+        }
+
+        private static List<string> GetUnusedVillagerNames()
+        {
+            var customizedVillagerNames = new HashSet<string>(CustomizedVillagers.Select(v => v.state.name));
+
+            return _customNames.Where(chatName => !customizedVillagerNames.Contains(chatName)).ToList();
+        }
+
+
+        private static List<Villager> GetUncustomizedVillagers()
+        {
+            var customizedNames = new HashSet<string>(CustomizedVillagers.Select(v => v.state.name));
+
+            var uncustomizedVillagers = _villagersServiceVillagers.Values
+                .Where(v => !customizedNames.Contains(v.state.name))
+                .ToList();
+
+            return uncustomizedVillagers;
+        }
+
+        [HarmonyPatch(typeof(Villager), nameof(Villager.Die))]
+        [HarmonyPatch([typeof(VillagerLossType), typeof(string), typeof(bool), typeof(float), typeof(SoundModel)])]
+        [HarmonyPostfix]
+        public static void DiePostfix(Villager __instance)
+        {
+            if (_pluginConfig.ForgetOnDie)
+            {
+                var died = CustomizedVillagers.Find(villager => villager.state.name == __instance.state.name);
+                if (died)
+                {
+                    CustomizedVillagers.Remove(died);
+                }
+            }
+
+            Instance.Logger.LogInfo($"{__instance.state.name} has died.");
+        }
+
+
+        [HarmonyPatch(typeof(MainController), "OnServicesReady")]
+        [HarmonyPostfix]
+        public static void MainController_OnServicesReady_Postfix()
+        {
+            Console.WriteLine($"OnServicesReady // Add Bind.");
+        }
+
+        private void Update()
+        {
+            if (!GameController.IsGameActive || MB.InputService.IsLocked())
+                return;
+            var shortcutAction = GetShortcutAction();
+            if (shortcutAction != null)
+            {
+                shortcutAction.Invoke();
+            }
+        }
+
+        private Action GetShortcutAction()
+        {
+            var matchingEntry = _renameVillagersShortcuts
+                .FirstOrDefault(entry => entry.Key.Value.IsDown());
+
+            return matchingEntry.Value;
+        }
+    }
+}
+*/
