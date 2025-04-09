@@ -1,3 +1,4 @@
+using UnityEngine;
 using UniverseLib.UI;
 using UniverseLib.UI.Models;
 using UniverseLib.UI.Panels;
@@ -6,6 +7,9 @@ namespace ATS.RenameVillager;
 
 public abstract class UIPanel : PanelBase
 {
+    public static Color darkColor = new Color(0.051f, 0.071f, 0.129f);
+    public static Color ligthColor = new Color(0.137f, 0.188f, 0.337f);
+    
     protected UIPanel(UIBase owner) : base(owner)
     {
     }

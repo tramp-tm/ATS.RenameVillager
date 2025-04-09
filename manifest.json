@@ -1,0 +1,7 @@
+﻿{
+  "name": "ATS.RenameVillager",
+  "version_number": "1.1.0",
+  "website_url": "https://github.com/tramp-tm/ATS.RenameVillager",
+  "description": "Mod for Against The Storm. Adds the ability to set a custom name for your settlers",
+  "dependencies": ["BepInEx-BepInExPack-5.4.2100", "ATS_API_Devs-API-3.5.0"]
+}

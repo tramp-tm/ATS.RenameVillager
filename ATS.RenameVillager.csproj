@@ -4,7 +4,7 @@
         <TargetFramework>netstandard2.0</TargetFramework>
         <AssemblyName>ATS.RenameVillager</AssemblyName>
         <Description>Mod for Against The Storm. Adds the ability to set a custom name for your settlers</Description>
-        <Version>1.0.0</Version>
+        <Version>1.1.0</Version>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <LangVersion>latest</LangVersion>
         <StormPath>/home/tramp/SteamLibraryExt4/steamapps/common/Against the Storm</StormPath>
@@ -26,6 +26,7 @@
 
     <ItemGroup>
         <PackageReference Include="UniverseLib.Mono" Version="1.5.1" />
+        <Reference Include="../lib/UniverseLib.Mono.dll" Publicize="true" />
     </ItemGroup>
 
     <ItemGroup>
@@ -53,6 +54,9 @@
         </ItemGroup>
 
         <Copy SourceFiles="@(Assembly)" DestinationFolder="$(StormPath)\BepInEx\plugins\ATS.RenameVillager" />
-        <Copy SourceFiles="@(Assets)" DestinationFolder="$(StormPath)\BepInEx\plugins\assets\" />
+        <Copy SourceFiles="@(Assets)" DestinationFolder="$(StormPath)\BepInEx\plugins\ATS.RenameVillager\assets\" />
+        <Copy SourceFiles="manifest.json" DestinationFolder="$(StormPath)\BepInEx\plugins\ATS.RenameVillager" />
+        <Copy SourceFiles="lib/UniverseLib.Mono.dll" DestinationFolder="$(StormPath)\BepInEx\plugins\ATS.RenameVillager" />
+        
     </Target>
 </Project>

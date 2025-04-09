@@ -5,26 +5,35 @@ using UnityEngine;
 
 namespace ATS.RenameVillager;
 
-public class PluginConfig
+internal static class PluginConfig
 {
-    public Dictionary<ConfigEntry<KeyboardShortcut>, Action> renameVillagersShortcuts = new();
-
-    public readonly string GreetingString;
-
-    public readonly ConfigEntry<KeyboardShortcut> ShowPanel;
-
-    public PluginConfig()
+    public static Dictionary<ConfigEntry<KeyboardShortcut>, Action> renameVillagersShortcuts = new();
+    
+    private static ConfigEntry<bool> _showOpinion = BindConfigParam("ShowOpinion", false, "Show a message with a villager's opinion");
+    public static bool ShowOpinion 
     {
-        GreetingString = BindConfigParam(
-            "GreetingString",
-            " just arrived!",
-            "Message for Greeting Renamed Villagers"
-        ).Value;
-        ShowPanel = BindHotkey();
+        get => _showOpinion.Value && OpinionsManager.hasAnyOpinions();
+        set
+        {
+            _showOpinion.Value = value;
+            Plugin.Instance.Config.Save();
+        }
     }
 
+    public static ConfigEntry<KeyboardShortcut> ShowPanel = BindHotkey();
 
-    private ConfigEntry<KeyboardShortcut> BindHotkey()
+    private static ConfigEntry<int> _opinionThreshold = BindConfigParam("OpinionThreshold", 10, "Probability of villager's opinion (%)"); 
+    public static int OpinionThreshold 
+    {
+        get => _opinionThreshold.Value;
+        set
+        {
+            _opinionThreshold.Value = value;
+            Plugin.Instance.Config.Save();
+        }
+    }
+
+    private static ConfigEntry<KeyboardShortcut> BindHotkey()
     {
         var renameVillagersPanelHotkeyDefault = new KeyboardShortcut(KeyCode.F9, Array.Empty<KeyCode>());
         var bind = BindConfigParam(

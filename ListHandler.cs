@@ -4,7 +4,7 @@ using UniverseLib.UI.Widgets.ScrollView;
 
 namespace ATS.RenameVillager;
 
-public class VillagerListHandler<TData, TCell> : ICellPoolDataSource<TCell> where TCell : VillagerCell
+public class ListHandler<TData, TCell> : ICellPoolDataSource<TCell> where TCell : PanelCell
 {
     protected Func<int> EntriesCount;
     protected Action<TCell, int> SetICell;
@@ -17,7 +17,7 @@ public class VillagerListHandler<TData, TCell> : ICellPoolDataSource<TCell> wher
 
     public int ItemCount { get; set; }
 
-    public VillagerListHandler(
+    public ListHandler(
         Func<int> entriesCountMethod,
         Action<TCell, int> setICellMethod
     )

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using ATS.RenameVillager;
 using Eremite;
 using Eremite.Characters.Villagers;
 using UnityEngine;
@@ -10,6 +9,8 @@ using UniverseLib;
 using UniverseLib.UI;
 using UniverseLib.UI.Models;
 using UniverseLib.UI.Widgets.ScrollView;
+
+namespace ATS.RenameVillager;
 
 public class VillagerUIPanel : UIPanel
 {
@@ -23,7 +24,7 @@ public class VillagerUIPanel : UIPanel
     public override bool CanDragAndResize => true;
 
 
-    public bool ShowMenu
+    private bool ShowMenu
     {
         get => Plugin.OverlayUiBase != null && Plugin.OverlayUiBase.Enabled;
         set
@@ -35,7 +36,7 @@ public class VillagerUIPanel : UIPanel
         }
     }
 
-    private VillagerListHandler<VillagerRenameData, VillagerCell> dataHandler;
+    private ListHandler<VillagerRenameData, VillagerCell> dataHandler;
     private ScrollPool<VillagerCell> villagerScrollPool;
 
     private ButtonRef newCloseButton;
@@ -43,9 +44,6 @@ public class VillagerUIPanel : UIPanel
 
     private static Dictionary<int, Villager> _villagersList = new();
     private static Dictionary<int, VillagerRenameData> _villagersData = new();
-
-    public static Color darkColor = new Color(0.051f, 0.071f, 0.129f);
-    public static Color ligthColor = new Color(0.137f, 0.188f, 0.337f);
 
     public VillagerUIPanel(UIBase owner, Dictionary<int, Villager> villagers, string hotkey) :
         base(owner)
@@ -114,12 +112,12 @@ public class VillagerUIPanel : UIPanel
 
     void RefreshButton_OnClick()
     {
-        FillPanel();
+        RefreshPanel();
     }
 
     protected override void ConstructPanelContent()
     {
-        dataHandler = new VillagerListHandler<VillagerRenameData, VillagerCell>(() =>
+        dataHandler = new ListHandler<VillagerRenameData, VillagerCell>(() =>
         {
             SyncVillagers();
             return _villagersData.Count;
@@ -135,16 +133,17 @@ public class VillagerUIPanel : UIPanel
         if (index >= _villagersData.Count)
             return;
         var sortedVillagers = _villagersData.Values
-            .OrderBy(v => v.villager.Race) // Сначала сортировка по полю Data
-            .ThenBy(v => v.originalName) // Затем сортировка по полю OriginalName
+            .OrderBy(v => v.villager.Race) 
+            .ThenBy(v => v.villager.Id) 
             .ToList();
         var obj = sortedVillagers[index];
-        cell.villagerData = obj;
-        cell.UpdateCell();
+        
+        cell.UpdateCell(obj);
     }
 
-    public void FillPanel()
+    public void RefreshPanel()
     {
+        SyncVillagers();
         dataHandler.RefreshData();
         villagerScrollPool.Refresh(true, true);
     }
@@ -152,6 +151,8 @@ public class VillagerUIPanel : UIPanel
     public void ShowPanel()
     {
         ShowMenu = !ShowMenu;
+        // SyncVillagers();
+        RefreshPanel();
     }
 
     public void setVillagers(Dictionary<int, Villager> villagers)
